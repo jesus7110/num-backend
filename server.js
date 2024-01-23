@@ -1,7 +1,8 @@
 const express = require('express')
 require('dotenv').config();
 const connectDB = require("./config/db");
-const userRouter = require('./route/users');
+const userRouter = require('./router/usersRouter');
+const gameRouter = require('./router/gamesRouter');
 
 const colors = require("colors");
 const app = express()
@@ -25,6 +26,7 @@ app.use(express.json());
 
 //router
 app.use('/api/user',userRouter)
+app.use('/api/game',gameRouter)
 
 
 
