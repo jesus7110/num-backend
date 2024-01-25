@@ -16,7 +16,7 @@ const userSchema = new mongoose.Schema({
         default: false,
         required: true
       },
-    walletBalance: { type: Number, default: 0 },
+    walletBalance: { type: Number, default: 110 },
     isKyc: { type: Boolean, default:false},
     token :{
            type:String,

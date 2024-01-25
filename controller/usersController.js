@@ -153,8 +153,49 @@ module.exports.verifyUserByToken = async(req, res) => {
 }
 
 
+module.exports.isUserAccountComplete = async(req, res) => {
+
+  try {
+    const  usermobileNumber = req.user.mobileNumber; 
+    const user = await User.findOne({ mobileNumber: usermobileNumber});
+    console.log("user",user);
+    if (!user) {
+      // If user not found
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    
+
+     // Check if the user is created or not
+     const isAccountCreated = user.is_account_created;
+
+     if (isAccountCreated) {
+
+      
+        return res.status(200).json({isAccountCreated: true ,message: 'User Account completed' });
+      
+
+    } else {
+      return res.status(402).json({isAccountCreated: false, message: 'User Account is not completed' });
+    }
+    
+    
+  } catch (error) {
+
+    if (error.name === 'TokenExpiredError') {
+      console.error('Token Expired');
+      res.status(404).json({isTokenExpired: true ,message: 'Token Expired' });
+    }
+    else {
+      console.error('Error in verifying user by token:', error);
+      res.status(500).json({ message: 'Internal server error' });}
+  }
+}
+
+
 module.exports.updateUserAccountInfo = async(req, res) => {
   try {
+    console.log('yoyo');
     const { name, email } = req.body;
     if (!name || !email) {
       res.status(400).json({user: null ,message: 'Missing user details in request body' });
@@ -179,7 +220,7 @@ module.exports.updateUserAccountInfo = async(req, res) => {
       }
     );
     
-    return res.status(200).json({message: 'User details updated successfully' });
+    return res.status(201).json({message: 'User details updated successfully' });
   } catch (error) {
     console.error(error);
    return res.status(500).json({message: 'Internal server error' });
