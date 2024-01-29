@@ -1,7 +1,6 @@
 const mongoose = require('mongoose');
-
 const gameSchema = new mongoose.Schema({
-    gameId: { type: Number,unique: true, required: true },
+    gameId: { type: Number, unique: true, required: true },
     checkInTime: { type: Date, required: true },
     startTime: { type: Date, required: true },
     endTime: { type: Date, required: true },
@@ -10,5 +9,3 @@ const gameSchema = new mongoose.Schema({
 });
 
 module.exports = mongoose.model('Game', gameSchema);
-
-

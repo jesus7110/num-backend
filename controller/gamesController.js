@@ -10,7 +10,26 @@ let gameServerStatus = false;
 let activeGameRoom = null;
 let isGameRoomActive = false;
 
-module.exports.addGame = async (req, res) => {
+//NEED A function thay fetch this data every time server restarts
+let nextDaygame=[{
+  gameId: 159048,
+  startTime: '2024-01-29 12:16:00',
+  checkInTime: '2024-01-29 12:15:00'
+},
+{
+  gameId: 637112,
+  startTime: '2024-01-29 12:18:00',
+  checkInTime: '2024-01-29 12:17:00'
+},
+];
+
+module.exports.test = async () => {
+  console.log(nextDaygame);
+}
+
+
+
+module.exports.addGame = async (req, res) => {  
   try {
     const { startTimeIST, gameSessionTimeInSeconds } = req.body; // Assuming input is in seconds
 
@@ -19,14 +38,21 @@ module.exports.addGame = async (req, res) => {
       return res.status(400).send('Start time in IST and game session time in seconds are required');
     }
 
+    const currentDateTimeIST = moment().tz('Asia/Kolkata');
+    const startTimeUTC = moment.tz(startTimeIST, 'Asia/Kolkata').utc().toDate();
+    
+    // Check if the start time is on the same day as the current date
+    if (moment(startTimeUTC).isSame(currentDateTimeIST, 'day')) {
+      return res.status(400).send('Start time must be on the next day.');
+    }
+
     // Generate a unique gameId
     const gameId = Math.floor(Math.random() * 1000000) + 1; // Adjust for more robust uniqueness if needed
 
-    // Convert startTimeIST to UTC
-    const startTimeUTC = moment.tz(startTimeIST, 'Asia/Kolkata').utc().toDate();
     //console.log(startTimeIST);
    // console.log(startTimeUTC);
 
+   
     // Calculate endTime in seconds
     const endTimeInSeconds = startTimeUTC.getTime() + (gameSessionTimeInSeconds * 1000); // Convert minutes to seconds
 
@@ -70,6 +96,42 @@ module.exports.getNearestUpcomingGame = async (req, res) => {
   } catch (error) {
     console.error(error);
     return res.status(500).send('Error retrieving upcoming game');
+  }
+};
+
+//games from games collection for next day
+module.exports.getGamesForNextDay = async (req, res) => {
+  try {
+    const currentDateTimeIST = moment().tz('Asia/Kolkata'); // Get current date and time in IST
+    const startOfNextDay = currentDateTimeIST.add(1, 'days').startOf('day'); // Start of the next day
+
+    // Find games scheduled for the next day
+    const nextDayGames = await Game.find({
+      isActive: true,
+      startTime: { $gte: startOfNextDay.toDate(), $lt: startOfNextDay.add(1, 'days').toDate() }
+    }).sort({ startTime: 1 });
+
+    if (!nextDayGames || nextDayGames.length === 0) {
+      return res.status(404).send('No games scheduled for the next day');
+    }
+
+    // Convert startTime and checkInTime to IST strings for response
+    const responseData = nextDayGames.map((game) => ({
+      gameId: game.gameId,
+      startTime: moment(game.startTime).tz('Asia/Kolkata').format('YYYY-MM-DD HH:mm:ss'),
+      checkInTime: moment(game.checkInTime).tz('Asia/Kolkata').format('YYYY-MM-DD HH:mm:ss')
+    }));
+
+    nextDaygame = responseData;
+
+    console.log(responseData);
+    console.log("==================================");
+    console.log(nextDaygame);
+    startGameServer();
+    return res.status(200).send(responseData);
+  } catch (error) {
+    console.error(error);
+    return res.status(500).send('Error retrieving games for the next day');
   }
 };
 
@@ -132,69 +194,6 @@ module.exports.placeBet = async (req, res) => {
 };
 
 
-// Retrieve the ID of the upcoming game
-async function getUpcomingGame() {
-  const upcomingGame = await Game.findOne({ isActive: true, startTime: { $gte: moment.utc().toDate() } })
-    .sort({ startTime: 1 })
-    .limit(1);
-  return upcomingGame?._id;
-}
-
-
-// Function to create a game room
-async function createGameRoom(gameId) {
-  if (!isGameRoomActive) {
-    activeGameRoom = gameId;
-    isGameRoomActive = true;
-    console.log(`Game room created for game ${gameId}`);
-  } else {
-    console.log(`Game room already exists for game ${activeGameRoom}`);
-  }
-}
-
-// Function to destroy a game room
-function destroyGameRoom() {
-  activeGameRoom = null;
-  isGameRoomActive = false;
-  console.log('Game room destroyed');
-}
-
-// Modified startGameServer function
-module.exports.startGameServer = async (req, res) => {
-  gameServerStatus = true;
-  if (gameServerStatus) {
-    
-
-    
-      try {
-        while (gameServerStatus) {
-        //const gameId = await getUpcomingGame();
-        const {gameId }= req.body;
-
-        if (gameId) {
-          createGameRoom(gameId); // Create or check for existing room
-          //const winningNumbers = await runGame(gameId); // Run game logic
-          // Process winning numbers and send notifications
-          destroyGameRoom(); // Destroy room after game ends
-        } else {
-          console.log('No upcoming games found');
-          await new Promise((resolve) => setTimeout(resolve, 60000));
-        }
-      }
-      } catch (error) {
-        console.error('Error in game server loop:', error);
-        // Handle errors gracefully
-      }
-      finally {
-        gameServerStatus = false; // Ensure server status is reset even on errors
-        console.log('Game Server Stopped (finally block)');
-      }
-    
-  } else {
-    console.log('Game server is already running');
-  }
-}
-
 module.exports.runGame = async(req,res) => {
   const betData = [
     { betNumber: 14, userCount: 4, totalCoins: 900 },
@@ -207,10 +206,10 @@ module.exports.runGame = async(req,res) => {
     { betNumber: 4, userCount: 4, totalCoins: 1889 },
     { betNumber: 20, userCount: 3, totalCoins: 1962 },
     { betNumber: 15, userCount: 5, totalCoins: 2326 },
-    { betNumber: 2, userCount: 4, totalCoins: 2365 },
+    { betNumber: 2, userCount: 14, totalCoins: 2365 },
     { betNumber: 13, userCount: 5, totalCoins: 2568 },
     { betNumber: 1, userCount: 5, totalCoins: 2722 },
-    { betNumber: 19, userCount: 6, totalCoins: 2853 },
+    { betNumber: 19, userCount: 16, totalCoins: 2853 },
     { betNumber: 17, userCount: 8, totalCoins: 3209 },
     { betNumber: 11, userCount: 7, totalCoins: 3277 },
     { betNumber: 10, userCount: 6, totalCoins: 3541 },
@@ -298,36 +297,85 @@ module.exports.runGame = async(req,res) => {
 
 }
 
-// Start the game server
-module.exports.startGameServerr = async (req, res) => {
-  if (!gameServerStatus) {
-   gameServerStatus = true;
-   while (gameServerStatus) {
-    try {
-    // const gameId = await getUpcomingGame();
-     const gameId = req.body.gameId;
-     console.log(gameId)
-     if (gameId) {
-     // await createGameRoom(gameId); // Create game room using provided function
-      //const winningNumbers = await runGame(gameId); // Run the game logic
-      // Process winning numbers (send notifications, update scores, etc.)
-     // await nextInstance(); // Start the next game
-     } else {
-      console.log('No upcoming games found');
-     // await new Promise((resolve) => setTimeout(resolve, 60000)); // Check again in 1 minute
-     }
-    } catch (error) {
-     console.error('Error in game server loop:', error);
-     // Handle errors gracefully (e.g., try restarting server or sending alerts)
-    }
-   }
-  } else {
-   console.log('Game server is already running');
+
+
+module.exports.getSortedUpcomingGames = async() => {
+  try {
+    const currentDateTime = new Date();
+
+    // Fetch upcoming games whose check-in time is in the past and game is not active
+    const upcomingGames = await Game.find({
+      checkInTime: { $gt: currentDateTime }, // Updated condition to consider games whose checkInTime is greater than the current time
+      isActive: true, // Consider only active games
+    }).sort({ startTime: 1 }); // Sort by startTime in ascending order
+
+    return upcomingGames;
+  } catch (error) {
+    console.error('Error fetching and sorting upcoming games:', error);
+    throw error;
   }
- }
-// Stop the game server
-module.exports.stopGameServer = async(req,res) => {
+}
+
+// Function to start the game server
+module.exports.startGameServer= async() => {
+
+  if (!gameServerStatus) {
+    gameServerStatus = true;
+    console.log('Game server started.');
+
+    // Schedule the first game from nextDaygame
+    scheduleNextGame();
+  } else {
+    console.log('Game server is already running.');
+  }
+}
+
+// Function to schedule the next game
+function scheduleNextGame() {
+  //console.log(nextDaygame);
+  if (nextDaygame.length > 0) {
+    const nextGame = nextDaygame.shift(); // Get the first game from the queue
+
+    const { gameId, checkInTime, startTime } = nextGame;
+
+    // Calculate the time until checkInTime
+    const timeUntilCheckIn = moment(checkInTime).diff(moment(), 'milliseconds');
+
+    // Schedule the game to start at checkInTime
+    setTimeout(async () => {
+      await startGameRoom(gameId);
+    }, timeUntilCheckIn);
+
+    // Schedule the next game after the current game ends
+    const endTime = moment(startTime).add(30, 'seconds').toDate();
+    const timeUntilNextGame = moment(endTime).diff(moment(), 'milliseconds');
+
+    setTimeout(() => {
+      scheduleNextGame();
+    }, timeUntilNextGame);
+
+    console.log(`Game ${gameId} scheduled to start at ${checkInTime}`);
+  } else {
+    console.log('No more games in the queue.');
+    stopGameServer();
+  }
+}
+
+// Function to start a game room
+async function startGameRoom(gameId) {
+  if (!isGameRoomActive) {
+    activeGameRoom = gameId;
+    isGameRoomActive = true;
+
+    // Perform actions to start the game room, e.g., initialize players, set up game state
+    console.log(`Game room ${gameId} started.`);
+  } else {
+    console.log('Game room is already active.');
+  }
+}
+
+// Function to stop the game server
+function stopGameServer() {
   gameServerStatus = false;
-  console.log('Game Server Stopped');
-  return res.status(200).send('server stopped');
+  console.log('Game server stopped.');
 }
