@@ -1,5 +1,5 @@
 const router = require('express').Router();
-const { addGame, getNearestUpcomingGame, placeBet,runGame , getSortedUpcomingGames, getGamesForNextDay, test} =require ('../controller/gamesController');
+const { addGame, getNearestUpcomingGame, placeBet,runGame , getSortedUpcomingGames, startGameServer,getGamesForNextDay, test,teststartGameRoom,testplaceBet} =require ('../controller/gamesController');
 const {authenticateUser }= require('../middleware/authMiddleware');
 
 router.route('/addgame')
@@ -24,8 +24,12 @@ router.route('/upcominggames').get(async (req, res) => {
         }
     });
 
+
+    //test purpose only
+
+    
 router.route('/gamesfornextday').get(getGamesForNextDay);
-
-router.route('/test').get(test);
-
+router.route('/startgameserver').get(startGameServer);
+router.route('/teststartgameroom').get(teststartGameRoom);
+router.route('/testplacebet').post(authenticateUser,testplaceBet);
 module.exports = router ;

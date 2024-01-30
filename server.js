@@ -32,10 +32,10 @@ app.use(express.json());
 app.use('/api/user',userRouter)
 app.use('/api/game',gameRouter)
 
-// Schedule the task to run at 2:20 PM IST every day
-cron.schedule('0 35 11 * * *', async () => {
+// Schedule the task to run at 11:55 PM IST every day
+cron.schedule('0 50 23 * * *', async () => {
   // This will run the task every day at 2:20 PM IST
-  console.log("cron");
+  console.log("Game schedular called");
   try {
     await getGamesForNextDay();
     console.log('Scheduled task executed successfully.');
@@ -45,8 +45,18 @@ cron.schedule('0 35 11 * * *', async () => {
 },{ scheduled: true, timezone: 'Asia/Kolkata' });
 
 
-//start the game server
-startGameServer();
+
+// Start Game server at 11:55 PM IST every day
+cron.schedule('0 7 13 * * *', async () => {
+  // This will run the task every day at 2:20 PM IST
+  console.log("Game Server starting");
+  try {
+    await startGameServer();;
+    console.log('Game Server Start successfully.');
+  } catch (error) {
+    console.error('Error Game Server Start:', error);
+  }
+},{ scheduled: true, timezone: 'Asia/Kolkata' });
 
 
 app.listen(process.env.SERVERPORT || 8000)

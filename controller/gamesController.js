@@ -1,9 +1,12 @@
 const Game = require('../models/gamesModel');
+const Sequencegame = require('../models/sequencegamesModel'); 
 const Bet = require('../models/betSchema');
 const moment = require('moment-timezone');
 const User = require('../models/userModel');
 const authenticateUser = require('../middleware/authMiddleware');
 const GameRoom = require('../models/gameRoomModel');
+const BetModel = require('../models/betModel');
+const mongoose = require('mongoose');
 
 // Global variables
 let gameServerStatus = false;
@@ -11,17 +14,7 @@ let activeGameRoom = null;
 let isGameRoomActive = false;
 
 //NEED A function thay fetch this data every time server restarts
-let nextDaygame=[{
-  gameId: 159048,
-  startTime: '2024-01-29 12:16:00',
-  checkInTime: '2024-01-29 12:15:00'
-},
-{
-  gameId: 637112,
-  startTime: '2024-01-29 12:18:00',
-  checkInTime: '2024-01-29 12:17:00'
-},
-];
+let nextDaygame=[];
 
 module.exports.test = async () => {
   console.log(nextDaygame);
@@ -99,94 +92,62 @@ module.exports.getNearestUpcomingGame = async (req, res) => {
   }
 };
 
-//games from games collection for next day
-module.exports.getGamesForNextDay = async (req, res) => {
-  try {
-    const currentDateTimeIST = moment().tz('Asia/Kolkata'); // Get current date and time in IST
-    const startOfNextDay = currentDateTimeIST.add(1, 'days').startOf('day'); // Start of the next day
-
-    // Find games scheduled for the next day
-    const nextDayGames = await Game.find({
-      isActive: true,
-      startTime: { $gte: startOfNextDay.toDate(), $lt: startOfNextDay.add(1, 'days').toDate() }
-    }).sort({ startTime: 1 });
-
-    if (!nextDayGames || nextDayGames.length === 0) {
-      return res.status(404).send('No games scheduled for the next day');
-    }
-
-    // Convert startTime and checkInTime to IST strings for response
-    const responseData = nextDayGames.map((game) => ({
-      gameId: game.gameId,
-      startTime: moment(game.startTime).tz('Asia/Kolkata').format('YYYY-MM-DD HH:mm:ss'),
-      checkInTime: moment(game.checkInTime).tz('Asia/Kolkata').format('YYYY-MM-DD HH:mm:ss')
-    }));
-
-    nextDaygame = responseData;
-
-    console.log(responseData);
-    console.log("==================================");
-    console.log(nextDaygame);
-    startGameServer();
-    return res.status(200).send(responseData);
-  } catch (error) {
-    console.error(error);
-    return res.status(500).send('Error retrieving games for the next day');
-  }
-};
 
 module.exports.placeBet = async (req, res) => {
   try {
-    // Authenticate user
-    //const user = await authenticateUser(req); // Replace with your authentication logic
+    const { numbers, amount, coinsBetted, gameId } = req.body;
+    const userMobileNumber = req.user.mobileNumber;
 
-    const { numbers, amount,coinsBetted,gameId } = req.body;
-    const  usermobileNumber = req.user.mobileNumber;
-     //console.log(usermobileNumber);
-    let user = await User.findOne({ mobileNumber: usermobileNumber });
     // Validate input
     if (!numbers || !amount || isNaN(amount) || amount <= 0) {
       return res.status(400).send('Invalid bet details');
     }
 
     // Check wallet balance
-    if (user.walletBalance < amount) {
+    const user = await User.findOne({ mobileNumber: userMobileNumber });
+    if (!user || user.walletBalance < amount) {
       return res.status(400).send('Insufficient wallet balance');
     }
 
-    // Find the game
-    const game = await Game.findOne({gameId:req.body.gameId});
-    if (!game) {
-      return res.status(404).send('Game not found');
+    // Check if the game is active by finding the corresponding game room
+    const gameRoom = await GameRoom.findOne({ gameId });
+
+    if (!gameRoom) {
+      return res.status(400).send('Game is not active');
     }
 
-    // Check if game is active and accepting bets
-    // if (!game.isActive || game.startTime <= Date.now()) {
-    //   return res.status(400).send('Game is not active or betting has closed');
-    // }
+    // Check if the user has already placed a bet with the same numbers
+    const existingBet = gameRoom.bets.find(bet =>
+      bet.mobileNumber === userMobileNumber && bet.numbers.some(num => numbers.includes(num))
+    );
 
-    // Check for existing bet
-    const existingBet = await Bet.findOne({ mobileNumber: user.mobileNumber, gameId: req.body.gameId });
     if (existingBet) {
-      return res.status(401).send('You have already placed a bet for this game');
+      return res.status(401).send('You have already placed a bet with the same numbers');
     }
 
-    // Deduct amount from wallet
+   
+    
+    const newBet = {
+      mobileNumber: userMobileNumber,
+      numbers,
+      amount,
+      coinsBetted,
+    };
+
+    if (gameRoom.bets) {
+      gameRoom.bets.push(newBet);
+    } else {
+      gameRoom.bets = [newBet];
+    }
+
+     // Deduct amount from wallet
+    await gameRoom.save();
+
     user.walletBalance -= amount;
     await user.save();
 
-    // Create bet document
-    const bet = new Bet({
-      mobileNumber: user.mobileNumber,
-      gameId: req.body.gameId,
-      numbers: req.body.numbers,
-      amounts: req.body.amounts,
-      coinsBetted: req.body.coinsBetted,
-    });
 
-    await bet.save();
-
-    res.status(201).send(bet);
+    res.status(201).send('Bet placed successfully');
   } catch (error) {
     console.error(error);
     res.status(500).send('Error placing bet');
@@ -316,12 +277,33 @@ module.exports.getSortedUpcomingGames = async() => {
   }
 }
 
+// Function to import the list of games from the sequencegame collection
+async function importGamesFromSequenceGame() {
+  try {
+    const sequenceGameList = await Sequencegame.find({}).sort({ startTime: 1 });
+
+    
+    nextDaygame = sequenceGameList.map((game) => ({
+      gameId: game.gameId,
+      startTime: moment(game.startTime).tz('Asia/Kolkata').format('YYYY-MM-DD HH:mm:ss'),
+      checkInTime: moment(game.checkInTime).tz('Asia/Kolkata').format('YYYY-MM-DD HH:mm:ss')
+    }));
+
+    console.log('Imported game list from sequencegame:', nextDaygame);
+  } catch (error) {
+    console.error('Error importing games from sequencegame:', error);
+  }
+}
+
 // Function to start the game server
 module.exports.startGameServer= async() => {
 
   if (!gameServerStatus) {
     gameServerStatus = true;
     console.log('Game server started.');
+
+    //import list of the games fromth sequenceGame 
+    await importGamesFromSequenceGame();
 
     // Schedule the first game from nextDaygame
     scheduleNextGame();
@@ -332,7 +314,7 @@ module.exports.startGameServer= async() => {
 
 // Function to schedule the next game
 function scheduleNextGame() {
-  //console.log(nextDaygame);
+  console.log(nextDaygame);
   if (nextDaygame.length > 0) {
     const nextGame = nextDaygame.shift(); // Get the first game from the queue
 
@@ -367,8 +349,21 @@ async function startGameRoom(gameId) {
     activeGameRoom = gameId;
     isGameRoomActive = true;
 
+    // Create a dynamic collection name based on gameId for temporary bets
+    const betCollectionName = `bets_${gameId}`;
+
+    // Create a mongoose model for the temporary bet collection
+    const BetModel = mongoose.model(betCollectionName, new mongoose.Schema({
+      mobileNumber: { type: String, required: true },
+      numbers: [{ type: Number, min: 1, max: 21 }],
+      coinsBetted: [{ number: { type: Number, min: 1, max: 21 }, coin: { type: Number } }],
+    }));
+
     // Perform actions to start the game room, e.g., initialize players, set up game state
     console.log(`Game room ${gameId} started.`);
+
+    // Log the name of the temporary bet collection for reference
+    console.log(`Temporary bet collection name: ${betCollectionName}`);
   } else {
     console.log('Game room is already active.');
   }
@@ -379,3 +374,134 @@ function stopGameServer() {
   gameServerStatus = false;
   console.log('Game server stopped.');
 }
+
+
+//games from games collection for next day
+module.exports.getGamesForNextDay = async (req, res) => {
+  try {
+    const currentDateTimeIST = moment().tz('Asia/Kolkata'); // Get current date and time in IST
+    const startOfNextDay = currentDateTimeIST.add(1, 'days').startOf('day'); // Start of the next day
+    
+
+    // Find games scheduled for the next day
+    const nextDayGames = await Game.find({
+      isActive: true,
+      startTime: { $gte: startOfNextDay.toDate(), $lt: startOfNextDay.add(1, 'days').toDate() }
+    }).sort({ startTime: 1 });
+
+    if (!nextDayGames || nextDayGames.length === 0) {
+      return res.status(404).send('No games scheduled for the next day');
+    }
+
+    // Convert startTime and checkInTime to IST strings for response
+    const responseData = nextDayGames.map((game) => ({
+      gameId: game.gameId,
+      startTime: moment(game.startTime).tz('Asia/Kolkata').format('YYYY-MM-DD HH:mm:ss'),
+      checkInTime: moment(game.checkInTime).tz('Asia/Kolkata').format('YYYY-MM-DD HH:mm:ss'),
+      
+    }));
+
+
+    await Sequencegame.deleteMany({}); 
+    await Sequencegame.insertMany(responseData);
+
+    console.log('Sorted game list for the next day:', responseData);
+
+    // Start the game server (if not already running)
+   // startGameServer();
+
+    return res.status(200).send(responseData);
+  } catch (error) {
+    console.error(error);
+    return res.status(500).send('Error retrieving games for the next day');
+  }
+};
+
+
+
+//test codes
+
+const testgameId = 9001
+module.exports.teststartGameRoom = async() => {
+  if (!isGameRoomActive) {
+    activeGameRoom = testgameId;
+    isGameRoomActive = true;
+
+    // Create a new game room or find an existing one
+    let gameRoom = await GameRoom.findOne({ gameId:testgameId });
+
+    if (!gameRoom) {
+      console.log("no existing game room, create a new one");
+      gameRoom = new GameRoom({ gameId:testgameId });
+      await gameRoom.save();
+      return console.log(`Game room ${testgameId} started.`);
+    }
+    else{
+      return console.log(`Game room ${testgameId} is already active.`);
+    }
+
+    
+
+  } else {
+    console.log('Game room is already active.');
+  }
+}
+
+module.exports.testplaceBet = async (req, res) => {
+  try {
+    const { numbers, amount, coinsBetted, gameId } = req.body;
+    const userMobileNumber = req.user.mobileNumber;
+
+    // Validate input
+    if (!numbers || !amount || isNaN(amount) || amount <= 0) {
+      return res.status(400).send('Invalid bet details');
+    }
+
+    // Check wallet balance
+    const user = await User.findOne({ mobileNumber: userMobileNumber });
+    if (!user || user.walletBalance < amount) {
+      return res.status(400).send('Insufficient wallet balance');
+    }
+
+    // Check if the game is active by finding the corresponding game room
+    const gameRoom = await GameRoom.findOne({ gameId });
+
+    if (!gameRoom) {
+      return res.status(400).send('Game is not active');
+    }
+
+    // Check if the user has already placed a bet with the same numbers
+    const existingBet = gameRoom.bets.find(bet =>
+      bet.mobileNumber === userMobileNumber && bet.numbers.some(num => numbers.includes(num))
+    );
+
+    if (existingBet) {
+      return res.status(401).send('You have already placed a bet with the same numbers');
+    }
+
+    // Deduct amount from wallet
+    user.walletBalance -= amount;
+    await user.save();
+
+    // Create or update the bet in the game room
+    const newBet = {
+      mobileNumber: userMobileNumber,
+      numbers,
+      amount,
+      coinsBetted,
+    };
+
+    if (gameRoom.bets) {
+      gameRoom.bets.push(newBet);
+    } else {
+      gameRoom.bets = [newBet];
+    }
+
+    await gameRoom.save();
+
+    res.status(201).send('Bet placed successfully');
+  } catch (error) {
+    console.error(error);
+    res.status(500).send('Error placing bet');
+  }
+};
