@@ -14,7 +14,22 @@ let activeGameRoom = null;
 let isGameRoomActive = false;
 
 //NEED A function thay fetch this data every time server restarts
-let nextDaygame=[];
+let nextDaygame=[
+  {
+    gameId: 743954,
+    startTime: '2024-01-31 05:39:00',
+    checkInTime: '2024-01-31 05:38:00'
+  },
+  {
+    gameId: 230991,
+    startTime: '2024-01-31 05:41:00',
+    checkInTime: '2024-01-31 05:40:00'
+  },
+  {
+    gameId: 160403,
+    startTime: '2024-01-31 05:43:00',
+    checkInTime: '2024-01-31 05:42:00'
+  }];
 
 module.exports.test = async () => {
   console.log(nextDaygame);
@@ -302,8 +317,8 @@ module.exports.startGameServer= async() => {
     gameServerStatus = true;
     console.log('Game server started.');
 
-    //import list of the games fromth sequenceGame 
-    await importGamesFromSequenceGame();
+    //import list of the games from the sequenceGame 
+     //await importGamesFromSequenceGame();
 
     // Schedule the first game from nextDaygame
     scheduleNextGame();
@@ -323,10 +338,18 @@ function scheduleNextGame() {
     // Calculate the time until checkInTime
     const timeUntilCheckIn = moment(checkInTime).diff(moment(), 'milliseconds');
 
-    // Schedule the game to start at checkInTime
+    //Create Game Room 
     setTimeout(async () => {
       await startGameRoom(gameId);
     }, timeUntilCheckIn);
+
+    // Schedule the runGame function to execute at startTime
+    const timeUntilGameStart = moment(startTime).diff(moment(), 'milliseconds');
+
+    setTimeout(async () => {
+      // Execute the runGame function when the game officially starts
+      await testrunGame(gameId);
+    }, timeUntilGameStart);
 
     // Schedule the next game after the current game ends
     const endTime = moment(startTime).add(30, 'seconds').toDate();
@@ -343,29 +366,62 @@ function scheduleNextGame() {
   }
 }
 
+// Function to execute the game algorithm
+async function testrunGame(gameId) {
+  try {
+  
+    console.log(`Running game logic for game ${gameId}`);
+
+    const betData = await getplacebetData(gameId);
+    
+    await destroyGameRoom(gameId);
+
+    console.log(`Game ${gameId} completed.`);
+  } catch (error) {
+    console.error('Error running game:', error);
+  }
+}
+
 // Function to start a game room
-async function startGameRoom(gameId) {
+async function startGameRoom(testgameId) {
   if (!isGameRoomActive) {
-    activeGameRoom = gameId;
+    activeGameRoom = testgameId;
     isGameRoomActive = true;
 
-    // Create a dynamic collection name based on gameId for temporary bets
-    const betCollectionName = `bets_${gameId}`;
+    let gameRoom = await GameRoom.findOne({ gameId:testgameId });
 
-    // Create a mongoose model for the temporary bet collection
-    const BetModel = mongoose.model(betCollectionName, new mongoose.Schema({
-      mobileNumber: { type: String, required: true },
-      numbers: [{ type: Number, min: 1, max: 21 }],
-      coinsBetted: [{ number: { type: Number, min: 1, max: 21 }, coin: { type: Number } }],
-    }));
+    if (!gameRoom) {
+      console.log("no existing game room, create a new one");
+      gameRoom = new GameRoom({ gameId:testgameId });
+      await gameRoom.save();
+      return console.log(`Game room ${testgameId} started.`);
+    }
+    else{
+      return console.log(`Game room ${testgameId} is already active.`);
+    } 
 
-    // Perform actions to start the game room, e.g., initialize players, set up game state
-    console.log(`Game room ${gameId} started.`);
-
-    // Log the name of the temporary bet collection for reference
-    console.log(`Temporary bet collection name: ${betCollectionName}`);
   } else {
     console.log('Game room is already active.');
+  }
+}
+
+
+async function destroyGameRoom(testgameId) {
+  try {
+    
+    const gameRoom = await GameRoom.findOne({ gameId: testgameId });
+
+    if (!gameRoom) {
+      console.log(`No existing game room with gameId ${testgameId}`);
+      return;
+    }
+    isGameRoomActive = false;
+
+    await gameRoom.deleteOne();
+
+    console.log(`Game room with gameId ${testgameId} destroyed.`);
+  } catch (error) {
+    console.error('Error destroying game room:', error);
   }
 }
 
@@ -418,6 +474,60 @@ module.exports.getGamesForNextDay = async (req, res) => {
 };
 
 
+// Function to transform bet data
+function transformBetData(betData) {
+  const transformedData = {};
+
+  betData.forEach((bets) => {
+    const { numbers, coinsBetted } = bets;
+
+    numbers.forEach((number, index) => {
+      const betNumber = number;
+      const coin = coinsBetted[index].coin;
+
+      if (!transformedData[betNumber]) {
+        // Initialize the entry for the betNumber
+        transformedData[betNumber] = {
+          betNumber,
+          userCount: 0,
+          totalCoins: 0,
+        };
+      }
+
+      // Update the userCount and totalCoins for the betNumber
+      transformedData[betNumber].userCount += 1;
+      transformedData[betNumber].totalCoins += coin;
+    });
+  });
+
+  // Convert the object values to an array
+  const result = Object.values(transformedData);
+
+  // Sort the array by betNumber if needed
+  result.sort((a, b) => a.betNumber - b.betNumber);
+
+  console.log(result);
+  return result;
+}
+
+async function getplacebetData(testgameId){
+  try{
+    const gameRoom = await GameRoom.findOne({ gameId:testgameId });
+
+    if (!gameRoom) {
+      console.error('Game room not found');
+      return null;
+    }
+
+    console.log(gameRoom.bets);
+    const transformedBetData = transformBetData(gameRoom.bets);
+console.log(transformedBetData);
+    return transformedBetData;
+
+  }catch(error){
+    console.log("Error occured",error);
+  }
+}
 
 //test codes
 
@@ -505,3 +615,24 @@ module.exports.testplaceBet = async (req, res) => {
     res.status(500).send('Error placing bet');
   }
 };
+
+
+
+module.exports.getplacebetData = async(req, res) => {
+  try{
+    const gameRoom = await GameRoom.findOne({ gameId:testgameId });
+
+    if (!gameRoom) {
+      console.error('Game room not found');
+      return null;
+    }
+
+    console.log(gameRoom.bets);
+    const transformedBetData = transformBetData(gameRoom.bets);
+console.log(transformedBetData);
+    return transformedBetData;
+
+  }catch(error){
+    console.log("Error occured",error);
+  }
+}

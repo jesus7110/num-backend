@@ -1,5 +1,5 @@
 const router = require('express').Router();
-const { addGame, getNearestUpcomingGame, placeBet,runGame , getSortedUpcomingGames, startGameServer,getGamesForNextDay, test,teststartGameRoom,testplaceBet} =require ('../controller/gamesController');
+const { addGame, getNearestUpcomingGame, placeBet,runGame , getSortedUpcomingGames, startGameServer,getGamesForNextDay, test,teststartGameRoom,testplaceBet,getplacebetData} =require ('../controller/gamesController');
 const {authenticateUser }= require('../middleware/authMiddleware');
 
 router.route('/addgame')
@@ -32,4 +32,12 @@ router.route('/gamesfornextday').get(getGamesForNextDay);
 router.route('/startgameserver').get(startGameServer);
 router.route('/teststartgameroom').get(teststartGameRoom);
 router.route('/testplacebet').post(authenticateUser,testplaceBet);
+router.route('/getplacebetdata').get(getplacebetData);
 module.exports = router ;
+
+
+//for each unique bet (parameter: numbers)
+
+
+
+
