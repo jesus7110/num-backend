@@ -131,9 +131,15 @@ module.exports.verifyUserByToken = async(req, res) => {
 
      if (isAccountCreated) {
 
-      
-        res.status(401).json({isAccountCreated: true ,message: 'User Account completed' });
-      
+           
+        res.status(401).json({
+          isAccountCreated: true , 
+          mobileNumber:user.mobileNumber,
+          name:user.name,
+          email:user.email,
+          walletbalance:user.walletBalance,
+          message: 'User Account completed' });
+        
 
     } else {
       res.status(402).json({isAccountCreated: false, message: 'User Account is not completed' });
@@ -150,6 +156,24 @@ module.exports.verifyUserByToken = async(req, res) => {
       console.error('Error in verifying user by token:', error);
       res.status(500).json({ message: 'Internal server error' });}
   }
+}
+
+module.exports.getWallet = async(req, res) => {
+  try{
+    const  usermobileNumber = req.user.mobileNumber; 
+    const user = await User.findOne({ mobileNumber: usermobileNumber});
+    console.log("user",user);
+    if (!user) {
+      // If user not found
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    return res.status(200).json({walletBalance:user.walletBalance,message:"Wallet Balance sent successfully"});
+
+  }catch(error){
+    comsole.log(error);
+  }
+
 }
 
 
@@ -172,7 +196,13 @@ module.exports.isUserAccountComplete = async(req, res) => {
      if (isAccountCreated) {
 
       
-        return res.status(200).json({isAccountCreated: true ,message: 'User Account completed' });
+        return res.status(200).json({ 
+          isAccountCreated: true , 
+          mobileNumber:user.mobileNumber,
+          email:user.email,
+          name:user.name,
+          walletbalance:user.walletBalance,
+          message: 'User Account completed' });
       
 
     } else {
@@ -220,7 +250,11 @@ module.exports.updateUserAccountInfo = async(req, res) => {
       }
     );
     
-    return res.status(201).json({message: 'User details updated successfully' });
+    return res.status(201).json({
+      email:req.body.email,
+      name:req.body.name, 
+      walletBalance: user.walletBalance, 
+      message: 'User details updated successfully' });
   } catch (error) {
     console.error(error);
    return res.status(500).json({message: 'Internal server error' });

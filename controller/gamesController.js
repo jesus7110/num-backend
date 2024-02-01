@@ -35,6 +35,17 @@ module.exports.test = async () => {
   console.log(nextDaygame);
 }
 
+module.exports.getScheduledGames = async(req,res)=>{
+  try{
+
+    return res.status(200).send(
+      nextDaygame
+    )
+
+  }catch(error){
+    console.log(`Error in fetching upcoming game`);
+  }
+}
 
 
 module.exports.addGame = async (req, res) => {  

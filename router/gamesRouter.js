@@ -1,5 +1,5 @@
 const router = require('express').Router();
-const { addGame, getNearestUpcomingGame, placeBet,runGame , getSortedUpcomingGames, startGameServer,getGamesForNextDay, test,teststartGameRoom,testplaceBet,getplacebetData} =require ('../controller/gamesController');
+const { addGame, getScheduledGames,getNearestUpcomingGame, placeBet,runGame , getSortedUpcomingGames, startGameServer,getGamesForNextDay, test,teststartGameRoom,testplaceBet,getplacebetData} =require ('../controller/gamesController');
 const {authenticateUser }= require('../middleware/authMiddleware');
 
 router.route('/addgame')
@@ -12,8 +12,7 @@ router.route('/placebet')
     .post(authenticateUser,placeBet);
 
 
-router.route('/rungame')
-    .post(runGame);
+
 
 router.route('/upcominggames').get(async (req, res) => {
     try {
@@ -23,11 +22,12 @@ router.route('/upcominggames').get(async (req, res) => {
           res.status(500).send('Error fetching and sorting upcoming games');
         }
     });
+router.route('/getscheduledgames').get(getScheduledGames)
 
 
-    //test purpose only
+//test purpose only
 
-    
+router.route('/rungame').post(runGame);  
 router.route('/gamesfornextday').get(getGamesForNextDay);
 router.route('/startgameserver').get(startGameServer);
 router.route('/teststartgameroom').get(teststartGameRoom);
