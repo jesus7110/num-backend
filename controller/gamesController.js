@@ -6,7 +6,10 @@ const User = require('../models/userModel');
 const authenticateUser = require('../middleware/authMiddleware');
 const GameRoom = require('../models/gameRoomModel');
 const BetModel = require('../models/betModel');
+const Leaderboard = require('../models/leaderboardModel');
 const mongoose = require('mongoose');
+
+const { validationResult } = require('express-validator');
 
 // Global variables
 let gameServerStatus = false;
@@ -32,20 +35,30 @@ let nextDaygame=[
   }];
 
 module.exports.test = async () => {
-  console.log(nextDaygame);
+  console.log(nextDaygame[0]);
 }
 
-module.exports.getScheduledGames = async(req,res)=>{
-  try{
+module.exports.getScheduledGames = async (req, res) => {
+  try {
+    console.log('getScheduledGames', nextDaygame);
 
-    return res.status(200).send(
-      nextDaygame
-    )
+    if (nextDaygame.length === 0) {
+      return res.status(201).send({ message: 'No upcoming games found' });
+    }
 
-  }catch(error){
-    console.log(`Error in fetching upcoming game`);
+    const currentDateTimeIST = moment().tz('Asia/Kolkata').format('YYYY-MM-DD HH:mm:ss');
+    console.log(currentDateTimeIST);
+
+    let nextGame = nextDaygame[0];
+    nextGame.currentDateTimeIST = currentDateTimeIST;
+
+    return res.status(200).send(nextGame);
+  } catch (error) {
+    console.log(`Error in fetching upcoming game: ${error}`);
+    return res.status(500).send('Internal Server Error');
   }
-}
+};
+
 
 
 module.exports.addGame = async (req, res) => {  
@@ -329,7 +342,7 @@ module.exports.startGameServer= async() => {
     console.log('Game server started.');
 
     //import list of the games from the sequenceGame 
-     //await importGamesFromSequenceGame();
+     await importGamesFromSequenceGame();
 
     // Schedule the first game from nextDaygame
     scheduleNextGame();
@@ -384,6 +397,88 @@ async function testrunGame(gameId) {
     console.log(`Running game logic for game ${gameId}`);
 
     const betData = await getplacebetData(gameId);
+
+    //----- FUNCTION FOR GAME ALGORITHM
+    function calculateTotalBetAmount() {
+      return betData.reduce((total, bet) => total + bet.totalCoins, 0);
+    }
+
+    function totalWinner(winner){
+      //console.log(winner);
+      let winners = 0;
+      for(const bet of betData){
+          if (bet.betNumber === winner[0] || bet.betNumber === winner[1] || bet.betNumber === winner[2]  ) winners += bet.userCount;
+          
+      }
+      
+      return winners;
+    }
+
+    // Function to calculate efficiency score
+  function calculateEfficiencyScore(betNumber) {
+    const bet = betData.find(bet => bet.betNumber === betNumber);
+    if (!bet) return 0; // Handle missing bet numbers
+    return bet.userCount / (bet.totalCoins * getGiveawayMultiplier(betNumber));
+  }
+
+  // Function to get giveaway multiplier based on position
+  function getGiveawayMultiplier(position) {
+    if (position === 1) return 10;
+    if (position === 2) return 5;
+    if (position === 3) return 2;
+    return 1; // Handle other cases (e.g., no giveaway)
+  }
+
+  // Function to select winning numbers with min and max budget
+  function selectWinningNumbers(minBudget, maxBudget) {
+  
+    // Sort bets by user count (descending) to prioritize more users
+      const sortedBets = betData.sort((a, b) => b.userCount - a.userCount);
+    
+      const winningNumbers = [];
+      let totalGiveaway = 0;
+    
+    for (const bet of sortedBets) {
+        const potentialGiveaway = getGiveawayMultiplier(winningNumbers.length + 1) * bet.totalCoins;
+        if (totalGiveaway + potentialGiveaway <= maxBudget &&
+            totalGiveaway + potentialGiveaway >= minBudget) {
+          winningNumbers.push(bet.betNumber);
+          totalGiveaway += potentialGiveaway;  
+          if (winningNumbers.length === 3) break;
+        }
+       // console.log(totalGiveaway)
+      }
+      
+     
+      // Fill remaining slots if needed
+      while (winningNumbers.length < 3) {
+        for (const bet of sortedBets) {
+          if (!winningNumbers.includes(bet.betNumber)) {
+            winningNumbers.push(bet.betNumber);
+            break;
+          }
+        }
+      }
+        console.log("Total Giveaway :",totalGiveaway);
+      return winningNumbers;
+    }
+
+
+  const totalBetAmount = calculateTotalBetAmount();
+  const minBudget = 1;
+  const maxBudget = (totalBetAmount*95)/100;
+  console.log("Total Bet amount :",totalBetAmount);
+  console.log("Budget Limit is :", minBudget,"to", maxBudget);
+  const winningNumbers = selectWinningNumbers(minBudget, maxBudget);
+  console.log("Winning numbers:", winningNumbers);
+  const totalWinnerUser = totalWinner(winningNumbers);
+  console.log("Total Winner user :", totalWinnerUser);
+
+  console.log(winningNumbers);
+
+
+
+    
     
     await destroyGameRoom(gameId);
 
@@ -647,3 +742,132 @@ console.log(transformedBetData);
     console.log("Error occured",error);
   }
 }
+
+let gameId= 9001;
+let winningNumbers = [15,8,16];
+// Function to calculate total amount won for each user and create leaderboard
+//module.exports.calculateLeaderboard= async() => 
+
+async function calculateLeaderboard(gameId, winningNumbers, totalWinnerUser){
+  try {
+    // Save gameID and winningNumbers to the Leaderboard collection
+    const leaderboardData = {
+      gameId,
+      winningNumbers: {
+        firstNumber: winningNumbers[0],
+        secondNumber: winningNumbers[1],
+        thirdNumber: winningNumbers[2],
+      },
+      leaderboard: [],
+    };
+
+    // Retrieve the game room data
+    const gameRoom = await GameRoom.findOne({ gameId });
+
+    if (!gameRoom) {
+      console.error(`Game room not found for game ${gameId}`);
+      return;
+    }
+
+    // Initialize leaderboard
+    const leaderboard = [];
+
+    // Create a map to store the total amount won for each user
+    const userAmountMap = new Map();
+
+    // Iterate through the bets in the game room
+    for (const bet of gameRoom.bets) {
+      const { mobileNumber, numbers, coinsBetted } = bet;
+
+      // Check if the bet numbers match the winning numbers
+      const matchingNumbers = numbers.filter(number => winningNumbers.includes(number));
+
+      if (matchingNumbers.length > 0) {
+        // Calculate the total amount won for each user based on all their bets
+        let totalAmountWonForUser = 0;
+
+        for (const coinBet of coinsBetted) {
+          const { number, coin } = coinBet;
+
+          // Check if the coin bet number matches the winning numbers
+          if (winningNumbers.includes(number)) {
+            // Determine the position (1st, 2nd, 3rd)
+            const position = winningNumbers.indexOf(number) + 1;
+
+            // Calculate the total amount won based on the position
+            if (position === 1) {
+              totalAmountWonForUser += coin * 10;
+            } else if (position === 2) {
+              totalAmountWonForUser += coin * 5;
+            } else if (position === 3) {
+              totalAmountWonForUser += coin * 2;
+            }
+          }
+        }
+
+        // Update the total amount won for the user in the map
+        if (userAmountMap.has(mobileNumber)) {
+          userAmountMap.set(mobileNumber, userAmountMap.get(mobileNumber) + totalAmountWonForUser);
+        } else {
+          userAmountMap.set(mobileNumber, totalAmountWonForUser);
+        }
+      }
+    }
+
+    // Convert the userAmountMap to the leaderboard array
+    for (const [mobileNumber, amountWon] of userAmountMap.entries()) {
+      leaderboard.push({ mobileNumber, amountWon });
+    }
+
+    // Sort the leaderboard by amount won in descending order
+    leaderboard.sort((a, b) => b.amountWon - a.amountWon);
+
+    // Update user balances with the amount won
+    for (const entry of leaderboard) {
+      const user = await User.findOne({ mobileNumber: entry.mobileNumber });
+
+      if (user) {
+        user.walletBalance += entry.amountWon;
+        await user.save();
+      }
+    }
+
+    // Update the leaderboardData with the calculated leaderboard
+    leaderboardData.leaderboard = leaderboard;
+
+    // Save the leaderboardData to the Leaderboard collection
+    await Leaderboard.create(leaderboardData);
+
+    console.log('Leaderboard:', leaderboard);
+
+    // You can save the leaderboard data to a database or perform additional actions as needed
+  } catch (error) {
+    console.error('Error calculating leaderboard:', error);
+  }
+}
+
+
+module.exports.getLeaderboard = async (req, res) => {
+  try {
+    // Validate gameId parameter
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+
+    const { gameId } = req.params;
+
+    // Find the leaderboard data for the specified game
+    const leaderboard = await Leaderboard.findOne({ gameId });
+
+    if (!leaderboard) {
+      return res.status(404).json({ message: 'Leaderboard not found for the specified game' });
+    }
+
+    // Send the leaderboard data as the response
+    return res.status(200).json(leaderboard);
+  } catch (error) {
+    console.error(error);
+    return res.status(500).send('Error retrieving leaderboard');
+  }
+};
