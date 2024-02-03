@@ -20,8 +20,8 @@ let isGameRoomActive = false;
 let nextDaygame=[
   {
     gameId: 743954,
-    startTime: '2024-02-03 00:59:00',
-    checkInTime: '2024-02-03 00:58:00'
+    startTime: '2024-02-03 12:59:00',
+    checkInTime: '2024-02-03 12:58:00'
   }];
 
 module.exports.test = async () => {
@@ -627,7 +627,7 @@ console.log(transformedBetData);
 
 //test codes
 
-const testgameId = 9001
+const testgameId = 743954
 module.exports.teststartGameRoom = async() => {
   if (!isGameRoomActive) {
     activeGameRoom = testgameId;
