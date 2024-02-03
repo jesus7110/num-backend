@@ -20,18 +20,8 @@ let isGameRoomActive = false;
 let nextDaygame=[
   {
     gameId: 743954,
-    startTime: '2024-01-31 05:39:00',
-    checkInTime: '2024-01-31 05:38:00'
-  },
-  {
-    gameId: 230991,
-    startTime: '2024-01-31 05:41:00',
-    checkInTime: '2024-01-31 05:40:00'
-  },
-  {
-    gameId: 160403,
-    startTime: '2024-01-31 05:43:00',
-    checkInTime: '2024-01-31 05:42:00'
+    startTime: '2024-02-03 00:59:00',
+    checkInTime: '2024-02-03 00:58:00'
   }];
 
 module.exports.test = async () => {
@@ -476,8 +466,8 @@ async function testrunGame(gameId) {
 
   console.log(winningNumbers);
 
-
-
+  //create leaderboard
+  await calculateLeaderboard(gameId, winningNumbers)
     
     
     await destroyGameRoom(gameId);
@@ -748,7 +738,7 @@ let winningNumbers = [15,8,16];
 // Function to calculate total amount won for each user and create leaderboard
 //module.exports.calculateLeaderboard= async() => 
 
-async function calculateLeaderboard(gameId, winningNumbers, totalWinnerUser){
+async function calculateLeaderboard(gameId, winningNumbers){
   try {
     // Save gameID and winningNumbers to the Leaderboard collection
     const leaderboardData = {

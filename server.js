@@ -32,7 +32,7 @@ app.use(express.json());
 app.use('/api/user',userRouter)
 app.use('/api/game',gameRouter)
 
-// Schedule the task to run at 11:55 PM IST every day
+// Schedule the task to run at 11:50 PM IST every day
 cron.schedule('0 50 23 * * *', async () => {
   // This will run the task every day at 2:20 PM IST
   console.log("Game schedular called");
@@ -47,7 +47,7 @@ cron.schedule('0 50 23 * * *', async () => {
 
 
 // Start Game server at 11:55 PM IST every day
-cron.schedule('0 7 13 * * *', async () => {
+cron.schedule('0 55 23 * * *', async () => {
   // This will run the task every day at 2:20 PM IST
   console.log("Game Server starting");
   try {

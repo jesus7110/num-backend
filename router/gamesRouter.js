@@ -37,7 +37,7 @@ router.route('/getplacebetdata').get(getplacebetData);
 
 
 
-router.route('/getleaderboard').get(getLeaderboard);
+router.route('/getleaderboard/:gameId').get(getLeaderboard);
 module.exports = router ;
 
 
