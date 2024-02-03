@@ -13,16 +13,11 @@ const { validationResult } = require('express-validator');
 
 // Global variables
 let gameServerStatus = false;
-let activeGameRoom = null;
+let activeGameRoom;
 let isGameRoomActive = false;
 
 //NEED A function thay fetch this data every time server restarts
-let nextDaygame=[
-  {
-    gameId: 99999,
-    startTime: '2024-02-03 22:20:00',
-    checkInTime: '2024-02-03 22:10:00'
-  }];
+let nextDaygame=[];
 
 module.exports.test = async () => {
   console.log(nextDaygame[0]);
