@@ -627,8 +627,9 @@ console.log(transformedBetData);
 
 //test codes
 
-const testgameId = 743954
+const testgameId = 743954;
 module.exports.teststartGameRoom = async() => {
+  isGameRoomActive= false; //remove
   if (!isGameRoomActive) {
     activeGameRoom = testgameId;
     isGameRoomActive = true;
