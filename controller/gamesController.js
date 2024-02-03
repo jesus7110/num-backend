@@ -19,9 +19,9 @@ let isGameRoomActive = false;
 //NEED A function thay fetch this data every time server restarts
 let nextDaygame=[
   {
-    gameId: 743954,
-    startTime: '2024-02-03 12:59:00',
-    checkInTime: '2024-02-03 12:58:00'
+    gameId: 99999,
+    startTime: '2024-02-03 22:20:00',
+    checkInTime: '2024-02-03 22:10:00'
   }];
 
 module.exports.test = async () => {
