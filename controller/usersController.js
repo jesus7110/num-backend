@@ -4,6 +4,9 @@ const generateOTP = require('../middleware/otp-generatorMiddleware'); // Import 
 const bcrypt = require("bcrypt");
 const jwt = require('jsonwebtoken');
 const _ = require("lodash");
+require('dotenv').config();
+
+
 
 
 
