@@ -7,7 +7,27 @@ const _ = require("lodash");
 require('dotenv').config();
 
 
+//Twilio API configuration to send OTP
 
+const accountSid= process.env.TWILIO_ACCOUNT_SID;
+const authToken = process.env.TWILIO_AUTH_TOKEN;
+
+const client = require('twilio')(accountSid,authToken);
+
+const sendSMS = async(number,body) => {
+  let msgOptions = {
+    from: process.env.TWILIO_FROM_NUMBER,
+    to: number,
+    body
+  }
+  try{
+    const message  = await client.messages.create(msgOptions);
+    console.log("message sent",message);
+
+  }catch(error){
+    console.error(error);
+  }
+}
 
 
  const generateAuthToken = (user) => {
@@ -59,7 +79,9 @@ module.exports.login = async (req, res) => {
   otpInstance.otp = await bcrypt.hash(OTP, salt); // Hash the actual OTP, not the function
 
   const result = await otpInstance.save();
-console.log(OTP);
+//console.log(OTP);
+  sendSMS(`+91${mobileNumber}`,`Otp for login is ${OTP}`);
+
   return res.status(200).send(`OTP sent successfully!`); // Avoid revealing OTP in response
 };
 
