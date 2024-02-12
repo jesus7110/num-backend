@@ -10,9 +10,6 @@ const Leaderboard = require('../models/leaderboardModel');
 const mongoose = require('mongoose');
 
 const { validationResult } = require('express-validator');
-const Redis = require('ioredis');
-const redis = new Redis();
-
 
 // Global variables
 let gameServerStatus = false;

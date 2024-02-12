@@ -3,6 +3,7 @@ require('dotenv').config();
 const connectDB = require("./config/db");
 const userRouter = require('./router/usersRouter');
 const gameRouter = require('./router/gamesRouter');
+const notificationRouter = require('./router/notificationRouter');
 const { getGamesForNextDay,startGameServer} =require ('./controller/gamesController');
 
 const cron = require('node-cron');
@@ -31,6 +32,7 @@ app.use(express.json());
 //router
 app.use('/api/user',userRouter)
 app.use('/api/game',gameRouter)
+app.use('/api/notification',notificationRouter);
 
 // Schedule the task to run at 11:50 PM IST every day
 cron.schedule('0 50 23 * * *', async () => {
